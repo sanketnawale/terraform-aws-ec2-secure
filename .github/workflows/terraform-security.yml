@@ -1,0 +1,85 @@
+name: Terraform Security & Policy Validation
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+
+jobs:
+  security-validation:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Setup Terraform
+      uses: hashicorp/setup-terraform@v3
+      with:
+        terraform_version: 1.5.0
+        
+    - name: Setup OPA
+      run: |
+        curl -L -o opa https://github.com/open-policy-agent/opa/releases/latest/download/opa_linux_amd64
+        chmod +x opa
+        sudo mv opa /usr/local/bin/
+        
+    - name: Install security tools
+      run: |
+        # Install tfsec
+        curl -s https://raw.githubusercontent.com/aquasecurity/tfsec/master/scripts/install_linux.sh | bash
+        # Install Checkov
+        pip3 install checkov
+        
+    - name: Create reports directory
+      run: mkdir -p reports
+      
+    - name: Terraform Init
+      working-directory: terraform
+      run: terraform init
+      
+    - name: Terraform Validate
+      working-directory: terraform
+      run: terraform validate
+      
+    - name: Terraform Format Check
+      working-directory: terraform
+      run: terraform fmt -check -recursive
+      
+    - name: Run tfsec
+      working-directory: terraform
+      run: |
+        tfsec . --config-file=../.tfsec.yml --format=json --out=../reports/tfsec-report.json
+        tfsec . --config-file=../.tfsec.yml
+        
+    - name: Run Checkov
+      working-directory: terraform
+      run: |
+        checkov -f . --config-file=../.checkov.yml --output=json --output-file=../reports/checkov-report.json
+        checkov -f . --config-file=../.checkov.yml
+        
+    - name: Generate Terraform Plan
+      working-directory: terraform
+      run: |
+        terraform plan -out=tfplan.binary
+        terraform show -json tfplan.binary > tfplan.json
+        
+    - name: Run OPA Policy Checks
+      working-directory: terraform
+      run: |
+        echo "Running security policies..."
+        opa eval --input tfplan.json --data ../policies/ec2-security.rego "data.terraform.ec2.security.deny"
+        
+        echo "Running compliance policies..."
+        opa eval --input tfplan.json --data ../policies/compliance.rego "data.terraform.compliance.deny"
+        
+        echo "Running cost policies..."
+        opa eval --input tfplan.json --data ../policies/cost.rego "data.terraform.cost.deny"
+        
+    - name: Upload Security Reports
+      uses: actions/upload-artifact@v4
+      with:
+        name: security-reports
+        path: reports/
+

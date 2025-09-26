@@ -1,0 +1,10 @@
+framework: terraform
+check:
+  - CKV_AWS_79  # Ensure Instance Metadata Service Version 2 (IMDSv2) is Enabled
+  - CKV_AWS_8   # Ensure all data stored in the Launch configuration EBS is securely encrypted at rest
+  - CKV_AWS_135 # Ensure that EC2 is EBS optimized
+skip-check:
+  - CKV_AWS_88  # EC2 instance should not have public IP (we might need this for some scenarios)
+
+soft-fail: true
+

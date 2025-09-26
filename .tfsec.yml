@@ -1,0 +1,11 @@
+severity: MEDIUM
+exclude:
+  - aws-ec2-no-public-egress-sgr  # We need internet access
+  
+custom_checks:
+  - check_id: "CUSTOM001"
+    description: "Ensure instances have monitoring enabled"
+    resource_type: "aws_instance"
+    attribute: "monitoring"
+    required_value: true
+
